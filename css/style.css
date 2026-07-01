@@ -124,6 +124,48 @@ html, body {
   margin-bottom: 6px;
 }
 
+#cityNav label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+#cityNav select {
+  width: 100%;
+  font-size: 14px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+#locateMeBtn {
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  background: #2a9d8f;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.locate-control {
+  width: 34px;
+  height: 34px;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
 #reportForm form {
   display: flex;
   flex-direction: column;

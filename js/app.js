@@ -98,6 +98,67 @@ document.getElementById("cityInput").addEventListener("change", (e) => {
   }
 });
 
+// ---- City quick-navigation dropdown (always visible in the panel) ----
+const cityNavSelect = document.getElementById("cityNavSelect");
+if (cityNavSelect) {
+  [...RUSSIA_CITIES]
+    .sort((a, b) => a.name.localeCompare(b.name, "ru"))
+    .forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = `${c.lat},${c.lng}`;
+      opt.textContent = c.name;
+      cityNavSelect.appendChild(opt);
+    });
+  cityNavSelect.addEventListener("change", () => {
+    if (!cityNavSelect.value) return;
+    const [lat, lng] = cityNavSelect.value.split(",").map(Number);
+    map.setView([lat, lng], 11);
+    if (window.innerWidth <= 720) panelEl.classList.remove("open");
+  });
+}
+
+// ---- Geolocation: "locate me" (panel button + on-map control) ----
+let youAreHereMarker = null;
+function locateUser() {
+  if (!navigator.geolocation) {
+    alert("Геолокация не поддерживается вашим браузером.");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      map.setView([latitude, longitude], 13);
+      if (youAreHereMarker) youAreHereMarker.remove();
+      youAreHereMarker = L.marker([latitude, longitude])
+        .addTo(map)
+        .bindPopup("Вы здесь")
+        .openPopup();
+      if (window.innerWidth <= 720) panelEl.classList.remove("open");
+    },
+    () =>
+      alert(
+        "Не удалось определить местоположение. Разрешите доступ к геолокации в браузере."
+      )
+  );
+}
+
+const locateMeBtn = document.getElementById("locateMeBtn");
+if (locateMeBtn) locateMeBtn.addEventListener("click", locateUser);
+
+const LocateControl = L.Control.extend({
+  options: { position: "topleft" },
+  onAdd() {
+    const btn = L.DomUtil.create("button", "locate-control");
+    btn.type = "button";
+    btn.title = "Найти меня";
+    btn.textContent = "📍";
+    L.DomEvent.disableClickPropagation(btn);
+    L.DomEvent.on(btn, "click", locateUser);
+    return btn;
+  },
+});
+map.addControl(new LocateControl());
+
 // ---- Helpers ----
 function toMillis(ts) {
   if (!ts) return null;
