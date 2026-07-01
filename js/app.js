@@ -410,9 +410,17 @@ stationForm.addEventListener("submit", async (e) => {
 });
 
 // ---- Fuel stations from OpenStreetMap (Overpass API) ----
-// When the map is zoomed into a city, load real fuel stations (amenity=fuel)
-// so users can click a station and report its status without typing coords.
-const poiLayer = L.layerGroup().addTo(map);
+// Load real fuel stations (amenity=fuel) within the current viewport and show
+// them clustered, so they appear as soon as the map is zoomed to a region —
+// no need to pick an exact city. Clicking a station opens the report form.
+const POI_MIN_ZOOM = 10;
+const poiLayer = L.markerClusterGroup({
+  maxClusterRadius: 50,
+  disableClusteringAtZoom: 15,
+  chunkedLoading: true,
+});
+map.addLayer(poiLayer);
+
 const fuelIcon = L.divIcon({
   className: "fuel-poi",
   html: "⛽",
@@ -421,6 +429,14 @@ const fuelIcon = L.divIcon({
 });
 let poiFetchTimer = null;
 let lastPoiKey = "";
+
+function stationName(tags) {
+  if (!tags) return "АЗС";
+  if (tags.name && tags.brand && !tags.name.includes(tags.brand)) {
+    return `${tags.brand} — ${tags.name}`;
+  }
+  return tags.name || tags.brand || tags.operator || "АЗС";
+}
 
 function openReportForStation(lat, lng, name, tags) {
   reportFormSection.hidden = false;
@@ -437,7 +453,7 @@ function openReportForStation(lat, lng, name, tags) {
 }
 
 async function loadFuelStations() {
-  if (map.getZoom() < 12) {
+  if (map.getZoom() < POI_MIN_ZOOM) {
     poiLayer.clearLayers();
     lastPoiKey = "";
     return;
@@ -450,7 +466,14 @@ async function loadFuelStations() {
   const key = `${s},${w},${n},${e}`;
   if (key === lastPoiKey) return;
   lastPoiKey = key;
-  const query = `[out:json][timeout:25];node["amenity"="fuel"](${s},${w},${n},${e});out body 300;`;
+  const bbox = `(${s},${w},${n},${e})`;
+  // Include both point nodes and area (way) fuel stations; "out center"
+  // returns a representative coordinate for ways.
+  const query =
+    `[out:json][timeout:30];(` +
+    `node["amenity"="fuel"]${bbox};` +
+    `way["amenity"="fuel"]${bbox};` +
+    `);out center 2000;`;
   try {
     const resp = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
@@ -458,17 +481,18 @@ async function loadFuelStations() {
     });
     const data = await resp.json();
     poiLayer.clearLayers();
+    const markers = [];
     (data.elements || []).forEach((el) => {
-      if (!el.lat || !el.lon) return;
-      const name =
-        el.tags?.name || el.tags?.brand || el.tags?.operator || "АЗС";
-      const marker = L.marker([el.lat, el.lon], { icon: fuelIcon });
+      const lat = el.lat ?? el.center?.lat;
+      const lon = el.lon ?? el.center?.lon;
+      if (lat == null || lon == null) return;
+      const name = stationName(el.tags);
+      const marker = L.marker([lat, lon], { icon: fuelIcon });
       marker.bindTooltip(name, { direction: "top" });
-      marker.on("click", () =>
-        openReportForStation(el.lat, el.lon, name, el.tags)
-      );
-      marker.addTo(poiLayer);
+      marker.on("click", () => openReportForStation(lat, lon, name, el.tags));
+      markers.push(marker);
     });
+    poiLayer.addLayers(markers);
   } catch (err) {
     console.warn("Не удалось загрузить АЗС из OpenStreetMap:", err);
   }
@@ -479,6 +503,48 @@ map.on("moveend", () => {
   poiFetchTimer = setTimeout(loadFuelStations, 600);
 });
 loadFuelStations();
+
+// ---- Place search (Nominatim) — jump to any city, region or address ----
+const placeSearchForm = document.getElementById("placeSearchForm");
+const searchMsgEl = document.getElementById("searchMsg");
+if (placeSearchForm) {
+  placeSearchForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const q = document.getElementById("placeSearchInput").value.trim();
+    if (!q) return;
+    searchMsgEl.textContent = "Поиск...";
+    searchMsgEl.className = "";
+    try {
+      const url =
+        "https://nominatim.openstreetmap.org/search?format=json&limit=1" +
+        "&countrycodes=ru&accept-language=ru&q=" +
+        encodeURIComponent(q);
+      const resp = await fetch(url);
+      const results = await resp.json();
+      if (!results.length) {
+        searchMsgEl.textContent = "Ничего не найдено.";
+        searchMsgEl.className = "error";
+        return;
+      }
+      const r = results[0];
+      searchMsgEl.textContent = "";
+      if (r.boundingbox) {
+        const [south, north, west, east] = r.boundingbox.map(Number);
+        map.fitBounds([
+          [south, west],
+          [north, east],
+        ]);
+        if (map.getZoom() > 13) map.setZoom(13);
+      } else {
+        map.setView([Number(r.lat), Number(r.lon)], 12);
+      }
+      if (window.innerWidth <= 720) panelEl.classList.remove("open");
+    } catch (err) {
+      searchMsgEl.textContent = "Ошибка поиска. Попробуйте ещё раз.";
+      searchMsgEl.className = "error";
+    }
+  });
+}
 
 // Periodically re-render so "stale" state and time-ago labels stay fresh.
 setInterval(renderMarkers, 60000);

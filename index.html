@@ -6,6 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="description" content="Онлайн-карта наличия бензина, дизельного топлива и очередей на АЗС по регионам России. Данные добавляются пользователями в реальном времени." />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -24,13 +26,22 @@
 
       <section id="cityNav">
         <h2>Навигация</h2>
-        <label>Перейти к городу
+        <form id="placeSearchForm">
+          <label>Поиск места (город, область, адрес)
+            <div class="search-row">
+              <input type="text" id="placeSearchInput" placeholder="напр. Московская область" autocomplete="off" />
+              <button type="submit" id="placeSearchBtn">Найти</button>
+            </div>
+          </label>
+          <p id="searchMsg" role="status"></p>
+        </form>
+        <label>Быстрый переход к городу
           <select id="cityNavSelect">
             <option value="">— выберите город —</option>
           </select>
         </label>
         <button id="locateMeBtn" type="button">📍 Найти меня на карте</button>
-        <p class="hint">⛽ Приблизьте карту к городу — появятся значки заправок. Нажмите на заправку, чтобы отметить наличие топлива.</p>
+        <p class="hint">⛽ Приблизьте карту к городу или региону — появятся значки заправок (группируются в кружки с числом). Нажмите на заправку, чтобы отметить наличие топлива.</p>
       </section>
 
       <section id="legend">
@@ -113,6 +124,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
