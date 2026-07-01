@@ -221,6 +221,17 @@ html, body {
 }
 #searchMsg.error { color: var(--red); }
 
+.selected-station {
+  font-size: 13px;
+  font-weight: 600;
+  color: #14213d;
+  background: #eef2f7;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 0;
+}
+
 #reportForm form {
   display: flex;
   flex-direction: column;

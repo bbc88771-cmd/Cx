@@ -94,13 +94,7 @@ document.getElementById("cityInput").addEventListener("change", (e) => {
   const match = RUSSIA_CITIES.find(
     (c) => c.name.toLowerCase() === e.target.value.trim().toLowerCase()
   );
-  if (match) {
-    map.setView([match.lat, match.lng], 11);
-    const latEl = document.getElementById("latInput");
-    const lngEl = document.getElementById("lngInput");
-    if (!latEl.value) latEl.value = match.lat.toFixed(4);
-    if (!lngEl.value) lngEl.value = match.lng.toFixed(4);
-  }
+  if (match) map.setView([match.lat, match.lng], 11);
 });
 
 // ---- City quick-navigation dropdown (always visible in the panel) ----
@@ -276,15 +270,28 @@ const statusInput = document.getElementById("statusInput");
 const queueCarsWrap = document.getElementById("queueCarsWrap");
 
 document.getElementById("toggleAddBtn").addEventListener("click", () => {
+  if (!document.getElementById("osmIdInput").value) {
+    alert(
+      "Чтобы отметить заправку, приблизьте карту и нажмите на значок ⛽ нужной АЗС. Ставить точки в произвольном месте нельзя."
+    );
+    if (window.innerWidth <= 720) panelEl.classList.remove("open");
+    return;
+  }
   reportFormSection.hidden = !reportFormSection.hidden;
   if (window.innerWidth <= 720) panelEl.classList.add("open");
   if (!reportFormSection.hidden) reportFormSection.scrollIntoView({ behavior: "smooth" });
 });
 
+function resetSelectedStation() {
+  const sel = document.getElementById("selectedStation");
+  if (sel) sel.textContent = "Заправка не выбрана — нажмите значок ⛽ на карте";
+}
+
 document.getElementById("cancelFormBtn").addEventListener("click", () => {
   reportFormSection.hidden = true;
   stationForm.reset();
   formMsgEl.textContent = "";
+  resetSelectedStation();
 });
 
 document.getElementById("togglePanelBtn").addEventListener("click", () => {
@@ -293,43 +300,6 @@ document.getElementById("togglePanelBtn").addEventListener("click", () => {
 
 statusInput.addEventListener("change", () => {
   queueCarsWrap.hidden = statusInput.value !== "queue";
-});
-
-let pickMode = false;
-document.getElementById("pickOnMapBtn").addEventListener("click", () => {
-  pickMode = true;
-  formMsgEl.textContent = "Кликните на карте, чтобы указать местоположение АЗС.";
-  formMsgEl.className = "";
-  if (window.innerWidth <= 720) panelEl.classList.remove("open");
-});
-
-map.on("click", (e) => {
-  if (!pickMode) return;
-  document.getElementById("latInput").value = e.latlng.lat.toFixed(4);
-  document.getElementById("lngInput").value = e.latlng.lng.toFixed(4);
-  pickMode = false;
-  formMsgEl.textContent = "Координаты установлены.";
-  formMsgEl.className = "ok";
-  if (window.innerWidth <= 720) panelEl.classList.add("open");
-});
-
-document.getElementById("useLocationBtn").addEventListener("click", () => {
-  if (!navigator.geolocation) {
-    formMsgEl.textContent = "Геолокация не поддерживается браузером.";
-    formMsgEl.className = "error";
-    return;
-  }
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      document.getElementById("latInput").value = pos.coords.latitude.toFixed(4);
-      document.getElementById("lngInput").value = pos.coords.longitude.toFixed(4);
-      map.setView([pos.coords.latitude, pos.coords.longitude], 13);
-    },
-    () => {
-      formMsgEl.textContent = "Не удалось получить местоположение.";
-      formMsgEl.className = "error";
-    }
-  );
 });
 
 stationForm.addEventListener("submit", async (e) => {
@@ -358,13 +328,22 @@ stationForm.addEventListener("submit", async (e) => {
     : null;
   const note = document.getElementById("noteInput").value.trim().slice(0, 200);
 
+  const osmId = document.getElementById("osmIdInput").value;
+  const osmType = document.getElementById("osmTypeInput").value;
+  if (!osmId || !osmType) {
+    formMsgEl.textContent =
+      "Выберите заправку на карте (значок ⛽). Произвольные точки отмечать нельзя.";
+    formMsgEl.className = "error";
+    return;
+  }
+
   if (!city) {
     formMsgEl.textContent = "Укажите город.";
     formMsgEl.className = "error";
     return;
   }
 
-  const id = `${lat.toFixed(3)}_${lng.toFixed(3)}`;
+  const id = `osm_${osmType}_${osmId}`;
   const reporterId = getReporterId();
 
   const payload = {
@@ -372,6 +351,8 @@ stationForm.addEventListener("submit", async (e) => {
     address,
     lat,
     lng,
+    osmId,
+    osmType,
     fuelTypes,
     status,
     queueCars,
@@ -399,6 +380,7 @@ stationForm.addEventListener("submit", async (e) => {
     formMsgEl.className = "ok";
     stationForm.reset();
     queueCarsWrap.hidden = true;
+    resetSelectedStation();
     setTimeout(() => {
       reportFormSection.hidden = true;
     }, 1200);
@@ -438,14 +420,18 @@ function stationName(tags) {
   return tags.name || tags.brand || tags.operator || "АЗС";
 }
 
-function openReportForStation(lat, lng, name, tags) {
+function openReportForStation(el, lat, lng, name) {
+  const tags = el.tags || {};
   reportFormSection.hidden = false;
   document.getElementById("latInput").value = lat.toFixed(4);
   document.getElementById("lngInput").value = lng.toFixed(4);
-  const addressEl = document.getElementById("addressInput");
-  if (addressEl && !addressEl.value) addressEl.value = name;
+  document.getElementById("addressInput").value = name;
+  document.getElementById("osmIdInput").value = el.id;
+  document.getElementById("osmTypeInput").value = el.type;
+  const sel = document.getElementById("selectedStation");
+  if (sel) sel.textContent = "⛽ " + name;
   const cityEl = document.getElementById("cityInput");
-  if (cityEl && tags && tags["addr:city"] && !cityEl.value) {
+  if (cityEl && tags["addr:city"] && !cityEl.value) {
     cityEl.value = tags["addr:city"];
   }
   if (window.innerWidth <= 720) panelEl.classList.add("open");
@@ -489,7 +475,7 @@ async function loadFuelStations() {
       const name = stationName(el.tags);
       const marker = L.marker([lat, lon], { icon: fuelIcon });
       marker.bindTooltip(name, { direction: "top" });
-      marker.on("click", () => openReportForStation(lat, lon, name, el.tags));
+      marker.on("click", () => openReportForStation(el, lat, lon, name));
       markers.push(marker);
     });
     poiLayer.addLayers(markers);

@@ -65,25 +65,18 @@
       </section>
 
       <section id="reportForm" hidden>
-        <h2>Сообщить о статусе АЗС</h2>
+        <h2>Отметить заправку</h2>
         <form id="stationForm">
+          <p id="selectedStation" class="selected-station">Заправка не выбрана — нажмите значок ⛽ на карте</p>
+          <input type="hidden" id="latInput" />
+          <input type="hidden" id="lngInput" />
+          <input type="hidden" id="addressInput" />
+          <input type="hidden" id="osmIdInput" />
+          <input type="hidden" id="osmTypeInput" />
           <label>Город / населённый пункт
             <input type="text" id="cityInput" list="cityList" autocomplete="off" required />
             <datalist id="cityList"></datalist>
           </label>
-          <label>Название / адрес АЗС
-            <input type="text" id="addressInput" placeholder="напр. Лукойл, ул. Ленина 10" maxlength="120" />
-          </label>
-          <label>Координаты
-            <div class="coord-row">
-              <input type="number" step="0.0001" id="latInput" placeholder="широта" required />
-              <input type="number" step="0.0001" id="lngInput" placeholder="долгота" required />
-            </div>
-          </label>
-          <div class="coord-actions">
-            <button type="button" id="pickOnMapBtn">Указать на карте</button>
-            <button type="button" id="useLocationBtn">Моё местоположение</button>
-          </div>
           <fieldset>
             <legend>Виды топлива в наличии</legend>
             <label><input type="checkbox" name="fuel" value="92" /> АИ-92</label>
