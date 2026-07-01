@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /stations/{stationId} {
+      allow read: if true;
+
+      // Reports must reference a real OpenStreetMap fuel station (osmId/osmType),
+      // and the document id must be derived from it — this blocks arbitrary
+      // "fake" points placed anywhere on the map.
+      allow create, update: if
+        request.resource.data.lat is number &&
+        request.resource.data.lat > 30 && request.resource.data.lat < 82 &&
+        request.resource.data.lng is number &&
+        request.resource.data.lng > -180 && request.resource.data.lng < 180 &&
+        request.resource.data.status in ['available', 'queue', 'limited', 'none'] &&
+        request.resource.data.osmType in ['node', 'way'] &&
+        request.resource.data.osmId is string &&
+        request.resource.data.osmId.size() > 0 &&
+        stationId == 'osm_' + request.resource.data.osmType + '_' + request.resource.data.osmId &&
+        request.resource.data.city is string &&
+        request.resource.data.city.size() > 0 &&
+        request.resource.data.city.size() < 100 &&
+        (!('address' in request.resource.data) || request.resource.data.address.size() < 120) &&
+        (!('note' in request.resource.data) || request.resource.data.note.size() < 200);
+
+      allow delete: if false;
+    }
+  }
+}
