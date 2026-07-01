@@ -69,6 +69,11 @@ function saveLocalReports(data) {
 
 // ---- Map setup ----
 const map = L.map("map", { zoomControl: true }).setView([61, 90], 3);
+// Replace Leaflet's default attribution prefix (which shows a Ukrainian-flag
+// logo) with a plain text link, keeping the required library credit.
+map.attributionControl.setPrefix(
+  '<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>'
+);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "&copy; OpenStreetMap contributors",
   maxZoom: 18,
@@ -403,6 +408,77 @@ stationForm.addEventListener("submit", async (e) => {
     formMsgEl.className = "error";
   }
 });
+
+// ---- Fuel stations from OpenStreetMap (Overpass API) ----
+// When the map is zoomed into a city, load real fuel stations (amenity=fuel)
+// so users can click a station and report its status without typing coords.
+const poiLayer = L.layerGroup().addTo(map);
+const fuelIcon = L.divIcon({
+  className: "fuel-poi",
+  html: "⛽",
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
+});
+let poiFetchTimer = null;
+let lastPoiKey = "";
+
+function openReportForStation(lat, lng, name, tags) {
+  reportFormSection.hidden = false;
+  document.getElementById("latInput").value = lat.toFixed(4);
+  document.getElementById("lngInput").value = lng.toFixed(4);
+  const addressEl = document.getElementById("addressInput");
+  if (addressEl && !addressEl.value) addressEl.value = name;
+  const cityEl = document.getElementById("cityInput");
+  if (cityEl && tags && tags["addr:city"] && !cityEl.value) {
+    cityEl.value = tags["addr:city"];
+  }
+  if (window.innerWidth <= 720) panelEl.classList.add("open");
+  reportFormSection.scrollIntoView({ behavior: "smooth" });
+}
+
+async function loadFuelStations() {
+  if (map.getZoom() < 12) {
+    poiLayer.clearLayers();
+    lastPoiKey = "";
+    return;
+  }
+  const b = map.getBounds();
+  const s = b.getSouth().toFixed(3);
+  const w = b.getWest().toFixed(3);
+  const n = b.getNorth().toFixed(3);
+  const e = b.getEast().toFixed(3);
+  const key = `${s},${w},${n},${e}`;
+  if (key === lastPoiKey) return;
+  lastPoiKey = key;
+  const query = `[out:json][timeout:25];node["amenity"="fuel"](${s},${w},${n},${e});out body 300;`;
+  try {
+    const resp = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: "data=" + encodeURIComponent(query),
+    });
+    const data = await resp.json();
+    poiLayer.clearLayers();
+    (data.elements || []).forEach((el) => {
+      if (!el.lat || !el.lon) return;
+      const name =
+        el.tags?.name || el.tags?.brand || el.tags?.operator || "АЗС";
+      const marker = L.marker([el.lat, el.lon], { icon: fuelIcon });
+      marker.bindTooltip(name, { direction: "top" });
+      marker.on("click", () =>
+        openReportForStation(el.lat, el.lon, name, el.tags)
+      );
+      marker.addTo(poiLayer);
+    });
+  } catch (err) {
+    console.warn("Не удалось загрузить АЗС из OpenStreetMap:", err);
+  }
+}
+
+map.on("moveend", () => {
+  clearTimeout(poiFetchTimer);
+  poiFetchTimer = setTimeout(loadFuelStations, 600);
+});
+loadFuelStations();
 
 // Periodically re-render so "stale" state and time-ago labels stay fresh.
 setInterval(renderMarkers, 60000);
